@@ -180,7 +180,6 @@ end
     _, res = run_generic_mbc_sim(c_sys5_bat)
 end
 
-
 @testset "storage MBC: discharge" begin
     c_sys5_bat = PSB.build_system(PSITestSystems, "c_sys5_bat")
     storage1 = PSY.get_component(PSY.Storage, c_sys5_bat, "Bat")
@@ -192,14 +191,23 @@ end
     x_coords = [0.1, 0.3, 0.6, 1.0]
     val_at_zero = 0.1
     initial_input = 0.2
-    incr_curve = PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, incr_slopes)
-    decr_curve = PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, [0.3, 0.2, 0.1])
+    incr_curve =
+        PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, incr_slopes)
+    decr_curve =
+        PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, [0.3, 0.2, 0.1])
     add_mbc_inner!(c_sys5_bat, selector, incr_curve, decr_curve)
     extend_mbc!(c_sys5_bat, selector; zero_cost_at_min=true)
     _, res = run_generic_mbc_sim(c_sys5_bat)
-    display(read_variable(res, "EnergyVariable__EnergyReservoirStorage")[DateTime("2024-01-02T00:00:00")])
-    display(read_variable(res, "ActivePowerVariable__ThermalStandard")[DateTime("2024-01-02T00:00:00")])
-
+    display(
+        read_variable(res, "EnergyVariable__EnergyReservoirStorage")[DateTime(
+            "2024-01-02T00:00:00",
+        )],
+    )
+    display(
+        read_variable(res, "ActivePowerVariable__ThermalStandard")[DateTime(
+            "2024-01-02T00:00:00",
+        )],
+    )
 end
 
 # 

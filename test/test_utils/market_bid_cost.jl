@@ -265,17 +265,17 @@ end
 function add_mbc_inner!(
     sys::PSY.System,
     active_components::ComponentSelector;
-    incr_curve::Union{Nothing, PiecewiseIncrementalCurve} = nothing,
-    decr_curve::Union{Nothing, PiecewiseIncrementalCurve} = nothing
+    incr_curve::Union{Nothing, PiecewiseIncrementalCurve}=nothing,
+    decr_curve::Union{Nothing, PiecewiseIncrementalCurve}=nothing,
 )
     @assert !isempty(get_components(active_components, sys)) "No components selected"
     if isnothing(incr_curve) && isnothing(decr_curve)
         error("At least one of incr_curve or decr_curve must be provided")
     end
     mbc = MarketBidCost(
-            no_load_cost=0.0,
-            start_up=(hot=0.0, warm=0.0, cold=0.0),
-            shut_down=0.0,
+        no_load_cost=0.0,
+        start_up=(hot=0.0, warm=0.0, cold=0.0),
+        shut_down=0.0,
     )
     if !isnothing(decr_curve)
         set_decremental_offer_curves!(mbc, CostCurve(decr_curve))
@@ -304,15 +304,17 @@ function add_mbc!(
         error("At least one of incremental or decremental must be true")
     end
     if incremental
-        incr_curve = PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, incr_slopes)
+        incr_curve =
+            PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, incr_slopes)
     else
         incr_curve = nothing
     end
 
     if decremental
-        decr_curve = PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, decr_slopes)
+        decr_curve =
+            PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, decr_slopes)
     else
         decr_curve = nothing
     end
-    add_mbc_inner!(sys, active_components; incr_curve = incr_curve, decr_curve)
+    add_mbc_inner!(sys, active_components; incr_curve=incr_curve, decr_curve)
 end
