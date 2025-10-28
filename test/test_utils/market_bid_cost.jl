@@ -4,10 +4,10 @@ function _make_deterministic_ts(
     res_incr::Number,
     interval_incr::Number,
     init_time::DateTime,
-    horizon::TimePeriod,
-    interval::TimePeriod,
+    horizon::Period,
+    interval::Period,
     window_count::Int,
-    resolution::TimePeriod,
+    resolution::Period,
 )
     horizon_count = IS.get_horizon_count(horizon, resolution)
     ts_data = OrderedDict{DateTime, Vector{Float64}}()
@@ -67,10 +67,10 @@ function _make_deterministic_ts(
     incrs_x::NTuple{3, Float64},
     incrs_y::NTuple{3, Float64},
     init_time::DateTime,
-    horizon::TimePeriod,
-    interval::TimePeriod,
+    horizon::Period,
+    interval::Period,
     count::Int,
-    resolution::TimePeriod;
+    resolution::Period;
     override_min_x=nothing,
     create_extra_tranches=false,
 )
@@ -193,6 +193,7 @@ function extend_mbc!(
     # grab some Deterministic time series, so we know the horizon, count, and interval
     # (this assumes that things are regularly spaced)
     model_ts = get_deterministic_ts(sys)
+    # incremental_initial_input is cost at minimum generation, NOT cost at zero generation
     for comp in get_components(active_components, sys)
         op_cost = get_operation_cost(comp)
         @assert op_cost isa MarketBidCost
@@ -216,7 +217,6 @@ function extend_mbc!(
             baseline = get_value_curve(cost_curve)::PiecewiseIncrementalCurve
             baseline_initial = get_initial_input(baseline)
             if zero_cost_at_min
-                @show typeof(baseline_initial)
                 baseline_initial = 0.0
             end
             baseline_pwl = get_function_data(baseline)
@@ -227,7 +227,7 @@ function extend_mbc!(
             incr_y = slopes_vary ? (0.02, 0.07, 0.03) : (0.0, 0.0, 0.0)
 
             name_modifier = "_$(replace(get_name(comp), " " => "_"))_"
-            # this might have the wrong number of time steps, if system already has time series.
+
             initial_name =
                 "initial_input $(incr_or_decr)" *
                 (initial_input_names_vary ? name_modifier : "")
@@ -262,39 +262,57 @@ function extend_mbc!(
     end
 end
 
-function add_mbc!(
+function add_mbc_inner!(
     sys::PSY.System,
     active_components::ComponentSelector;
-    decremental::Bool=false,
+    incr_curve::Union{Nothing, PiecewiseIncrementalCurve} = nothing,
+    decr_curve::Union{Nothing, PiecewiseIncrementalCurve} = nothing
 )
-    incr_slopes = [0.3, 0.5, 0.7]
-    x_coords = [0.1, 0.3, 0.6, 1.0]
-    val_at_zero = 0.1
-    initial_input = 0.2
-    incr_curve = CostCurve(
-        PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, incr_slopes),
+    @assert !isempty(get_components(active_components, sys)) "No components selected"
+    if isnothing(incr_curve) && isnothing(decr_curve)
+        error("At least one of incr_curve or decr_curve must be provided")
+    end
+    mbc = MarketBidCost(
+            no_load_cost=0.0,
+            start_up=(hot=0.0, warm=0.0, cold=0.0),
+            shut_down=0.0,
     )
-    if decremental
-        decr_slopes = [0.13, 0.11, 0.09] # should these actually be negative?
-        decr_curve = CostCurve(
-            PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, decr_slopes),
-        )
-        mbc = MarketBidCost(;
-            no_load_cost=0.0,
-            start_up=(hot=0.0, warm=0.0, cold=0.0),
-            shut_down=0.0,
-            incremental_offer_curves=incr_curve,
-            decremental_offer_curves=decr_curve,
-        )
-    else
-        mbc = MarketBidCost(;
-            no_load_cost=0.0,
-            start_up=(hot=0.0, warm=0.0, cold=0.0),
-            shut_down=0.0,
-            incremental_offer_curves=incr_curve,
-        )
+    if !isnothing(decr_curve)
+        set_decremental_offer_curves!(mbc, CostCurve(decr_curve))
+    end
+    if !isnothing(incr_curve)
+        set_incremental_offer_curves!(mbc, CostCurve(incr_curve))
     end
     for comp in get_components(active_components, sys)
         set_operation_cost!(comp, mbc)
     end
+end
+
+function add_mbc!(
+    sys::PSY.System,
+    active_components::ComponentSelector;
+    incremental::Bool=true,
+    decremental::Bool=false,
+)
+    incr_slopes = [0.3, 0.5, 0.7]
+    decr_slopes = [0.13, 0.11, 0.09] # should these actually be negative?
+    x_coords = [0.1, 0.3, 0.6, 1.0]
+    val_at_zero = 0.1
+    initial_input = 0.2
+
+    if !incremental && !decremental
+        error("At least one of incremental or decremental must be true")
+    end
+    if incremental
+        incr_curve = PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, incr_slopes)
+    else
+        incr_curve = nothing
+    end
+
+    if decremental
+        decr_curve = PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, decr_slopes)
+    else
+        decr_curve = nothing
+    end
+    add_mbc_inner!(sys, active_components; incr_curve = incr_curve, decr_curve)
 end

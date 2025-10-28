@@ -110,11 +110,6 @@ function resample_timeseries!(sys, interval, horizon)
         end
     end
     # remove them
-    for comp in get_components(PSY.Device, sys)
-        for key in PSY.get_time_series_keys(comp)
-            remove_time_series!(sys, Deterministic, comp, get_name(key))
-        end
-    end
     clear_time_series!(sys) # oddly it doesn't work if I omit this.
     # resample and re-attach
     for key in keys(key_to_ts)
@@ -184,6 +179,30 @@ end
             TimeSeriesKey
     _, res = run_generic_mbc_sim(c_sys5_bat)
 end
+
+
+@testset "storage MBC: discharge" begin
+    c_sys5_bat = PSB.build_system(PSITestSystems, "c_sys5_bat")
+    storage1 = PSY.get_component(PSY.Storage, c_sys5_bat, "Bat")
+    set_storage_capacity!(storage1, 10.0)
+    selector = make_selector(PSY.Storage, "Bat")
+    # make discharging super cheap via setting the incremental curve to tiny numbers
+    # in contrast, the Thermal generators have slopes between 10 and 40.
+    incr_slopes = [0.1, 0.2, 0.3]
+    x_coords = [0.1, 0.3, 0.6, 1.0]
+    val_at_zero = 0.1
+    initial_input = 0.2
+    incr_curve = PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, incr_slopes)
+    decr_curve = PiecewiseIncrementalCurve(val_at_zero, initial_input, x_coords, [0.3, 0.2, 0.1])
+    add_mbc_inner!(c_sys5_bat, selector, incr_curve, decr_curve)
+    extend_mbc!(c_sys5_bat, selector; zero_cost_at_min=true)
+    _, res = run_generic_mbc_sim(c_sys5_bat)
+    display(read_variable(res, "EnergyVariable__EnergyReservoirStorage")[DateTime("2024-01-02T00:00:00")])
+    display(read_variable(res, "ActivePowerVariable__ThermalStandard")[DateTime("2024-01-02T00:00:00")])
+
+end
+
+# 
 
 # how to test...
 # 

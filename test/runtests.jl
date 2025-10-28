@@ -13,6 +13,12 @@ using Dates
 using TimeSeries
 import OrderedCollections: OrderedDict
 
+const LOCAL_CODE_COVERAGE = false
+if LOCAL_CODE_COVERAGE
+    using CoverageTools
+    using Coverage
+end
+
 const IS = InfrastructureSystems
 const PSY = PowerSystems
 const PSB = PowerSystemCaseBuilder
@@ -134,5 +140,9 @@ try
 finally
     # Guarantee that the global logger is reset.
     global_logger(logger)
+    if LOCAL_CODE_COVERAGE
+        coverage = CoverageTools.process_folder("src")
+        LCOV.writefile("lcov.info", coverage)
+    end
     nothing
 end
